@@ -1,0 +1,82 @@
+server:
+  port: ${SERVER_PORT:9002}
+
+cloudflare:
+  turnstile:
+    # Cloudflare Turnstile 的 Secret Key，测试用官方固定值；生产请改用环境变量注入
+    secret: ${CLOUDFLARE_TURNSTILE_SECRET:1x0000000000000000000000000000000AA}
+
+spring:
+  datasource:
+    url: ${SPRING_DATASOURCE_URL:jdbc:mysql://localhost:3306/lingxi_jianqiu?useSSL=false&serverTimezone=Asia/Shanghai&characterEncoding=UTF-8&allowPublicKeyRetrieval=true}
+    username: ${SPRING_DATASOURCE_USERNAME:root}
+    password: ${SPRING_DATASOURCE_PASSWORD:}
+    configuration:
+      maximum-pool-size: 20
+  servlet:
+    multipart:
+      enabled: true
+      max-file-size: 1000MB # 单个文件最大 1000MB
+      max-request-size: 2000MB # 单次请求最大 2000MB
+      location: ./temp/spring-upload # 临时上传目录
+  tomcat:
+    max-http-form-post-size: 2097152000
+    connection-timeout: 600000 # 连接超时时间
+    max-swallow-size: 2097152000
+  data:
+    redis:
+      host: ${SPRING_DATA_REDIS_HOST:localhost}
+      port: ${SPRING_DATA_REDIS_PORT:6379}
+      database: 0
+      timeout: 60000
+      lettuce:
+        cluster:
+          refresh:
+            adaptive: true
+            period: 20
+      password: ${SPRING_DATA_REDIS_PASSWORD:}
+  jackson:
+    time-zone: GMT+8
+    date-format: yyyy-MM-dd HH:mm:ss
+
+springdoc:
+  api-docs:
+    enabled: true
+    path: /v3/api-docs
+  swagger-ui:
+    enabled: true
+    path: /swagger-ui.html
+
+# Sa-Token 配置
+sa-token:
+  token-name: auth-token # Token 名称（对应前端请求头）
+  timeout: 300000 # Token 有效期（秒）
+  active-timeout: -1 # 最低活跃频率，-1 表示不限制
+  is-concurrent: true # 允许同一账号并发登录
+  is-share: false # 每次登录新建一个 token
+  token-style: uuid
+  is-log: false
+
+# MyBatis-Plus 配置
+mybatis-plus:
+  mapper-locations: classpath*:/mapper/**/*.xml
+  configuration:
+    map-underscore-to-camel-case: true
+
+# 文件上传配置
+file:
+  max-size: 1073741824 # 1000MB = 1GB
+
+# 公共文件访问配置（无需认证，用于视频/图片等资源播放）
+public-file:
+  paths:
+    - ${PUBLIC_VIDEO_PATH:./public}
+    - ${PUBLIC_UPLOAD_PATH:./uploads}
+
+# DeepSeek AI 配置
+deepseek:
+  api-key: ${DEEPSEEK_API_KEY:}
+  base-url: ${DEEPSEEK_BASE_URL:https://api.deepseek.com}
+  model: ${DEEPSEEK_MODEL:deepseek-chat}
+  max-tokens: 4096
+  temperature: 0.7

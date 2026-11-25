@@ -1,0 +1,39 @@
+{
+  "server_addr": ":8001",
+  "video_base_path": "./data/videos",
+  "uploads_path": "./data/uploads",
+  "database": {
+    "host": "127.0.0.1",
+    "port": "3306",
+    "user": "root",
+    "password": "",
+    "db_name": "lingxi_jianqiu",
+    "charset": "utf8mb4"
+  },
+  "redis": {
+    "host": "127.0.0.1",
+    "port": "6379",
+    "password": "",
+    "db": 0
+  },
+  "jwt": {
+    "secret": "change-me-in-production",
+    "access_expiry": 14400,
+    "refresh_expiry": 604800
+  },
+  "deepseek": {
+    "api_key": "",
+    "base_url": "https://api.deepseek.com/v1",
+    "model": "deepseek-chat"
+  },
+  "dashscope": {
+    "api_key": ""
+  },
+  "sendgrid": {
+    "api_key": ""
+  },
+  "cloudflare_turnstile": {
+    "site_key": "",
+    "secret_key": ""
+  }
+}

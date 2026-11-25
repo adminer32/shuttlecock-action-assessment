@@ -1,495 +1,365 @@
-# GoBackend 与教师端 代码说明文档
+<div align="center">
 
-> 适用代码范围：
-> - `GoBackend/` — 统一后端服务（Go 1.23 + Gin + GORM）
-> - `教师端/` — 教师端前后端（Vue 3 前端 + Spring Boot 3 多模块后端）
+# 翎翼毽球教学平台
+
+**Shuttlecock Action Assessment Platform**
+
+面向毽球教学的「AI 动作评估 + 智能课堂」一体化平台
+
+学生端 · 教师端 · Go 后端 · Java 后端 · 3D 动作演示 · DeepSeek 智能助教
+
+[![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![Go](https://img.shields.io/badge/Go-1.23-00ADD8.svg)](https://go.dev/)
+[![Java](https://img.shields.io/badge/Java-21-ED8B00.svg)](https://openjdk.org/)
+[![Spring Boot](https://img.shields.io/badge/Spring%20Boot-3.4.4-6DB33F.svg)](https://spring.io/projects/spring-boot)
+[![Vue](https://img.shields.io/badge/Vue-3.5-42B883.svg)](https://vuejs.org/)
+[![Vite](https://img.shields.io/badge/Vite-5%20%2F%207-646CFF.svg)](https://vitejs.dev/)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.x-3178C6.svg)](https://www.typescriptlang.org/)
+[![MySQL](https://img.shields.io/badge/MySQL-8.0-4479A1.svg)](https://www.mysql.com/)
+[![Redis](https://img.shields.io/badge/Redis-7-DC382D.svg)](https://redis.io/)
+[![Podman](https://img.shields.io/badge/Podman-Ready-892CA0.svg)](https://podman.io/)
+
+</div>
 
 ---
 
-## 一、整体定位
+## 目录
 
-翎翼毽球教学平台由两套前后端组成，本文档覆盖其中两段：
+- [项目简介](#项目简介)
+- [核心功能](#核心功能)
+- [系统架构](#系统架构)
+- [技术栈](#技术栈)
+- [仓库结构](#仓库结构)
+- [快速开始](#快速开始)
+  - [方式一：容器化部署（推荐）](#方式一容器化部署推荐)
+  - [方式二：本地开发](#方式二本地开发)
+- [服务与端口](#服务与端口)
+- [配置说明](#配置说明)
+- [文档](#文档)
+- [参与贡献](#参与贡献)
+- [开源许可](#开源许可)
 
-| 模块 | 端口 | 角色 |
+---
+
+## 项目简介
+
+**翎翼毽球教学平台**是一套面向毽球（Shuttlecock）专项教学的完整解决方案。平台借助计算机视觉与 3D 动作可视化技术，把「动作示范 → 动作捕捉 → 动作评分 → 个性化训练建议」串成闭环，同时为教师提供课堂回放、学情分析、作业批改与 AI 教学建议等教学管理能力。
+
+平台由**两条独立但协同的业务线**组成：
+
+| 业务线 | 使用者 | 前端 | 后端 |
+| --- | --- | --- | --- |
+| **学生学习线** | 学生 | `apps/student-web`（端口 5173） | `services/server-go`（端口 8001） |
+| **教师教学线** | 教师 | `apps/teacher-web`（端口 5173） | `services/server-java`（端口 9002） |
+
+两条业务线共享同一个 MySQL 实例与 Redis 实例，数据层互通；AI 能力统一接入 DeepSeek。
+
+> **设计取舍**：学生端后端采用 Go（高并发 WebSocket 流式 AI 对话 + 视频转录），教师端后端采用 Spring Boot（复杂业务编排、多模块分层、Sa-Token 权限体系）。这是历史演进与场景适配共同形成的架构，两端通过 `/api/v0/teacher/*` 轻量旁路与共享数据库保持协同。
+
+---
+
+## 核心功能
+
+### 学生学习线
+
+| 功能 | 说明 |
+| --- | --- |
+| **3D 动作演示** | 基于 Three.js 加载 FBX 骨骼动画与 GLB 场景，多角度展示毽球标准动作 |
+| **AI 陪练** | WebSocket 流式对话，DeepSeek 驱动的动作答疑与训练指导，支持笔记润色 |
+| **动作评估** | 上传/录制动作视频，后端结合动作捕捉数据（CSV）逐项评分并给出改进建议 |
+| **体质分析** | 身高体重、体脂、肌肉分布等指标的可视化（雷达图、人体肌肉图、液位图） |
+| **课程中心** | 课程分类树、视频播放进度记录、笔记查看 |
+| **智能课堂** | AI 课堂讲解、课堂回放、课程视频在线学习 |
+| **个人主页** | 学习统计、打卡记录、周趋势、日程管理、个人信息维护 |
+
+### 教师教学线
+
+| 功能 | 说明 |
+| --- | --- |
+| **教师工作台** | 班级概览、待处理事项、通知公告、今日课表 |
+| **课堂管理** | 课堂视频回放 + 逐帧 AI 分析（出勤率、参与度、动作识别） |
+| **学习管理** | AI 生成训练计划、计划审阅、视频库与学生分组推荐 |
+| **学情分析** | 班级/学生双维度看板、雷达图、能力分布、趋势曲线、AI 教学建议 |
+| **作业管理** | 作业创建/编辑/删除、学生提交查看、在线批改与反馈 |
+| **个人信息** | 教师档案维护、头像上传 |
+
+---
+
+## 系统架构
+
+```
+                         ┌──────────────────────────┐
+                         │        浏览器 / 移动端      │
+                         └───────────┬──────────────┘
+                                     │ HTTPS
+              ┌──────────────────────┴──────────────────────┐
+              │                                             │
+    ┌─────────▼──────────┐                       ┌──────────▼─────────┐
+    │  student-web :5173 │                       │  teacher-web :5173 │
+    │  Vue 3 + Vite 5    │                       │  Vue 3 + Vite 7    │
+    │  antd-vue / 3D     │                       │  Element Plus      │
+    └─────────┬──────────┘                       └──────────┬─────────┘
+              │ /api /videos /uploads                       │ /api /videos
+              │                                             │
+    ┌─────────▼──────────┐                       ┌──────────▼─────────┐
+    │   server-go :8001  │                       │ server-java :9002  │
+    │   Gin + GORM       │                       │ Spring Boot 3.4.4  │
+    │   JWT HS512        │                       │ Sa-Token + MP      │
+    │   WebSocket ×2     │                       │ JavaCV (FFmpeg)    │
+    └──────┬──────┬──────┘                       └──────────┬─────────┘
+           │      │                                         │
+           │      └──────────────┬──────────────────────────┘
+           │                     │
+    ┌──────▼──────┐       ┌──────▼──────┐        ┌────────────────────┐
+    │  MySQL 8.0  │       │  Redis 7    │        │  DeepSeek API      │
+    │ lingxi_     │       │  会话/缓存   │        │  (对话 / 计划 /     │
+    │ jianqiu     │       │             │        │   作业 / 建议)      │
+    └─────────────┘       └─────────────┘        └────────────────────┘
+
+    ┌───────────────────────────────────────────────────────────────┐
+    │  可选组件：tools/yolo-detector（Python + FastAPI + YOLOv8）     │
+    │  通过 /ws/analysis 向教师端推送课堂视频检测帧与出勤/参与度指标      │
+    └───────────────────────────────────────────────────────────────┘
+```
+
+### 请求链路要点
+
+1. **学生端**：`student-web` → Vite 代理 `/api`、`/videos`、`/uploads` → `server-go:8001`；AI 对话经 `/ws/ai` 走 WebSocket 流式返回。
+2. **教师端**：`teacher-web` → Vite 代理 `/api`、`/videos` → `server-java:9002`；课堂通知经 `/ws/teacher/notification`。
+3. **数据互通**：两端连接同一个 MySQL 库（`lingxi_jianqiu`），教师在教师端下发的作业与训练计划，学生在学生端可见。
+4. **AI 集成**：学生侧对话/笔记润色由 Go 端调用 DeepSeek；教师侧训练计划/作业/教学建议由 Java 端 `DeepSeekClient` 调用 DeepSeek。
+
+详见 [docs/architecture.md](docs/architecture.md)。
+
+---
+
+## 技术栈
+
+| 分层 | 学生端 | 教师端 |
 | --- | --- | --- |
-| `GoBackend` | `8001` | 统一后端：主要服务学生端（AI、动作分析、视频、课程、体质、训练计划等），同时暴露 `/api/v0/teacher/*` 给教师端的轻量查询 |
-| `ling-xi-zhi-jian-frontend` | `5173` | 学生端 Vue 3 前端（本文档不展开） |
-| `教师端/my-vue-app` | `5173`（开发） | 教师端 Vue 3 前端 |
-| `教师端/teacher-java` | `9002` | 教师端 Spring Boot 后端（提供 home / homework / learning / classes / classroom / AI 教学建议 等业务） |
-
-> 历史后端 `FastAPIBackend/` 与 `Springboot/` 已废弃，不再维护。
+| **前端框架** | Vue 3.5 + TypeScript 5.4 | Vue 3.5 + TypeScript 5.9 |
+| **构建工具** | Vite 5 | Vite 7 |
+| **状态管理** | Pinia 2 | Pinia 3 |
+| **路由** | Vue Router 4 | Vue Router 5 |
+| **UI 组件库** | Ant Design Vue 4 + Element Plus 2 | Element Plus 2.13 |
+| **图表/3D** | ECharts 5、Three.js 0.174 | ECharts 6、vue-echarts |
+| **样式** | SCSS | Tailwind CSS 4 |
+| **后端语言** | Go 1.23 | Java 21 |
+| **后端框架** | Gin 1.10 + GORM 1.25 | Spring Boot 3.4.4 |
+| **持久层** | GORM + MySQL 驱动 | MyBatis-Plus 3.5.9 + 自研 BaseJdbcDao |
+| **鉴权** | JWT HS512 + bcrypt | Sa-Token 1.39 |
+| **实时通信** | gorilla/websocket | Spring WebSocket |
+| **媒体处理** | — | JavaCV 1.5.11（含 FFmpeg） |
+| **API 文档** | — | Knife4j 4.5（`/swagger-ui.html`） |
+| **AI** | DeepSeek（`deepseek-chat`） | 自封装 `DeepSeekClient` |
+| **中间件** | MySQL 8.0 + Redis 7 | MySQL 8.0 + Redis 7 |
 
 ---
 
-## 二、GoBackend
-
-### 2.1 技术栈
-
-| 层 | 选型 |
-| --- | --- |
-| 语言 / 框架 | Go 1.23 + Gin 1.10 |
-| ORM | GORM 1.25 + MySQL 驱动 |
-| 缓存 | go-redis v9 |
-| 鉴权 | JWT HS512（`golang-jwt/jwt/v5`）+ bcrypt |
-| WebSocket | gorilla/websocket |
-| AI | DeepSeek（`deepseek-chat`）/ DashScope（占位） |
-| 配置 | `configs/config.json` + `internal/config` |
-| 静态资源 | `/videos/*` 课程视频、`/uploads/*` 用户上传 |
-
-### 2.2 目录结构
+## 仓库结构
 
 ```
-GoBackend/
-├── cmd/server/main.go           # 入口：初始化 DB/Redis/JWT，组装所有路由
-├── configs/config.json          # 配置文件
-├── internal/
-│   ├── config/                  # 配置加载（基于 encoding/json）
-│   ├── database/                # GORM 初始化 + AutoMigrate + 事务封装 (tx.go)
-│   ├── cache/                   # Redis 客户端
-│   ├── model/                   # 全部 GORM 模型
-│   ├── middleware/auth.go       # JWT 中间件
-│   ├── router/router.go         # Deps{DB, RDB, Config} 依赖注入
-│   ├── handler/                 # 业务处理器（functional style）
-│   │   ├── user/                # 登录、Token、游客 Token、文件上传
-│   │   ├── ai/                  # AI 聊天、教练、笔记管理、模型列表
-│   │   ├── content/             # 动作分析保存/历史/转录
-│   │   ├── course/              # 课程查询、教师课程
-│   │   ├── video/               # 播放进度、历史
-│   │   ├── schedule/            # 日程
-│   │   ├── student/             # 学习统计、体质、可视化
-│   │   └── transcribe/          # 视频转录 + AI 分析
-│   ├── service/                 # 业务服务层（按需新增）
-│   └── websocket/               # WebSocket：AI 聊天、教师通知
-├── pkg/                         # 通用组件
-│   ├── jwt/, response/, util/, userutil/
-├── scripts/                     # 工具：init_database.sql、gen_hash、test_login
-└── server.exe                   # 本地编译产物
+shuttlecock-action-assessment/
+├── apps/                          # 前端应用
+│   ├── student-web/               # 学生端（Vue 3 + Vite 5，端口 5173）
+│   └── teacher-web/               # 教师端（Vue 3 + Vite 7，端口 5173）
+├── services/                      # 后端服务
+│   ├── server-go/                 # 学生端后端（Go + Gin，端口 8001）
+│   │   ├── cmd/server/            # 程序入口
+│   │   ├── configs/               # 配置文件
+│   │   ├── internal/              # config / database / cache / model / middleware / router / handler / websocket
+│   │   └── pkg/                   # jwt / response / util
+│   └── server-java/               # 教师端后端（Spring Boot 3.4.4，端口 9002）
+│       ├── common/                # 公共库：common-core / common-jdbc / common-knife4j
+│       └── service/               # 业务模块：ai / analysis / auth / classes / classroom / common / home / homework / learning / profile
+├── tools/
+│   └── yolo-detector/             # 可选：Python + FastAPI + YOLOv8 课堂视频检测
+├── deploy/                        # 容器化部署（Podman Compose + 国内镜像加速）
+│   ├── docker/                    # 各服务 Dockerfile 与 Nginx 配置
+│   ├── scripts/                   # 一键构建/启停脚本
+│   └── podman-compose.yml
+├── docs/                          # 项目文档
+│   ├── architecture.md            # 系统架构
+│   ├── api.md                     # 接口文档
+│   ├── development.md             # 开发指南
+│   ├── database.md                # 数据模型
+│   └── README.md                  # 文档索引
+├── README.md
+└── LICENSE
 ```
 
-### 2.3 常用命令
+**代码规模**：Go 20 个源文件 / Java 125 个源文件 / Vue 127 个单文件组件 / TypeScript 103 个模块。
 
-```sh
-cd GoBackend
+---
 
-# 编译
-go build ./...
+## 快速开始
 
-# 开发运行（默认监听 :8001）
-go run cmd/server/main.go
+### 环境要求
 
-# 静态检查
-go vet ./...
-
-# 测试
-go test -race ./...
-```
-
-> 入口直接读取 `configs/config.json`；如需本地覆盖，可临时把 `password`、`jwt.secret`、`deepseek.api_key` 改为本地值。生产请通过环境变量/密钥管理注入，**不要把真实密钥提交到仓库**。
-
-### 2.4 关键路由
-
-`main.go` 集中注册所有路由，分四组：
-
-#### 公开路由（无 JWT）
-
-| Method | Path | Handler |
+| 依赖 | 版本 | 用途 |
 | --- | --- | --- |
-| POST | `/token` | `user.Login`（账号密码登录，返回 access + refresh） |
-| GET  | `/token` | `user.CheckToken` |
-| POST | `/token/refresh` | `user.RefreshToken` |
-| GET  | `/vtoken` | `user.CheckVToken`（游客 token） |
-| POST | `/vtoken` | `user.CreateVToken` |
-| GET  | `/captcha` | `user.GetCaptcha` |
-| POST | `/file/operation/upload` | `user.UploadFile` |
-| GET  | `/videos/*`, `/uploads/*` | 静态资源 |
+| Node.js | `^20.19.0` 或 `>=22.12.0` | 前端构建与开发 |
+| Go | 1.23+ | `server-go` |
+| JDK | 21 | `server-java` |
+| Maven | 3.9+ | `server-java` 构建 |
+| MySQL | 8.0+ | 数据存储 |
+| Redis | 7+ | 缓存与会话 |
+| Podman / Docker | 4.x / 20.x | 容器化部署（可选） |
 
-#### `/api/*`（需 JWT）
+### 方式一：容器化部署（推荐）
 
-动作分析 / 课程 / 视频 / 笔记润色 / 可视化 / 内容等：
+项目提供完整的 Podman Compose 部署工程，并默认使用**国内可拉取的镜像源**，无需额外配置即可在国内网络环境下构建启动。
 
-```
-POST   /api/analysis/save
-GET    /api/analysis/history
-GET    /api/analysis/queryByTaskId
-GET    /api/analysis/generateTrainingPlan
+> **Windows 用户注意**：请在 WSL2 中通过 `/mnt/d/` 路径访问本仓库，例如
+> `cd /mnt/d/AiWork/shuttlecock-action-assessment`，不要直接在 PowerShell 中执行 Podman 命令。
 
-GET    /api/physique/query
-POST   /api/physique/create
-PUT    /api/physique/update
+```bash
+# 1. 进入仓库（WSL 中）
+cd /mnt/d/AiWork/shuttlecock-action-assessment/deploy
 
-POST   /api/course/query
-GET    /api/course/getNoteById
+# 2. 准备环境变量
+cp .env.example .env
+vim .env                       # 填入数据库密码、JWT secret、DeepSeek API Key
 
-GET    /api/video/progress
-POST   /api/video/progress
-POST   /api/video/history/save | query
-GET    /api/video/history/detail
-DELETE /api/video/history/del
+# 3. 构建并启动全部服务
+./scripts/build.sh
+./scripts/up.sh
 
-POST   /api/ai/NotePolishing
-
-GET    /api/visualization/getMotionNameAnalysis
-GET    /api/visualization/queryHistoricalTrends
-GET    /api/visualization/getStatsByCreateBy
-
-GET    /api/content/queryCategory
-POST   /api/content/insert
-POST   /api/system/user/personalCenterSave
+# 4. 查看状态与日志
+podman ps
+./scripts/logs.sh
 ```
 
-#### `/api/v0/ai/*`（需 JWT，AI 对话）
+启动后访问：
 
-```
-POST   /api/v0/ai/chat
-POST   /api/v0/ai/coach/chat
-GET    /api/v0/ai/models
-GET    /api/v0/ai/health
-POST   /api/v0/ai/queryPersonalNotes
-POST   /api/v0/ai/addTranscriptionTask
-POST   /api/v0/ai/updateNote
-DELETE /api/v0/ai/del
-GET    /api/v0/ai/queryTaskStatus
-```
-
-#### `/api/v0/student/*`（需 JWT，学生学习域）
-
-```
-GET    /api/v0/student/learning/stats/:studentId
-GET    /api/v0/student/learning/action-scores/:studentId
-GET    /api/v0/student/learning/shuttlecock-skills/:studentId
-GET    /api/v0/student/learning/weekly-trend/:studentId
-GET    /api/v0/student/learning/checkin-records/:studentId
-POST   /api/v0/student/learning/practice-record
-GET    /api/v0/student/learning/practice-records/:studentId
-GET    /api/v0/student/learning/practice-record/:recordId
-DELETE /api/v0/student/learning/practice-record/:recordId
-
-GET    /api/v0/student/schedule/query
-POST   /api/v0/student/schedule/save
-DELETE /api/v0/student/schedule/del
-
-GET/POST/PUT  /api/v0/student/physique/
-GET/POST      /api/v0/student/auth/
-GET    /api/v0/student/users/profile
-```
-
-> 教学端 token 校验走 `/api/v0/student/auth/token`（不走 `jwtAuth` 中间件，自行返回 `valid/invalid`）。
-
-#### `/api/v0/teacher/*`（需 JWT，教师端轻量接口）
-
-```
-GET    /api/v0/teacher/lessons
-GET    /api/v0/teacher/lessons/:lessonId
-```
-
-> 当前仅暴露“教师课程列表 + 课程详情”。重业务（homework、classroom、learning、home、profile 等）由 `教师端/teacher-java` 提供。
-
-#### `/api/v0/transcribe/*`（需 JWT）
-
-```
-POST   /api/v0/transcribe/transcribe
-POST   /api/v0/transcribe/analyze
-POST   /api/v0/transcribe/full-process
-GET    /api/v0/transcribe/health
-```
-
-#### WebSocket
-
-| Path | 处理 |
+| 服务 | 地址 |
 | --- | --- |
-| `/ws/ai` | `websocket.HandleAIChat`（AI 流式对话） |
-| `/ws/teacher/notification` | `websocket.HandleTeacherNotification`（ping/pong 通道） |
+| 学生端 | http://localhost:8080 |
+| 教师端 | http://localhost:8081 |
+| 学生端后端 | http://localhost:8001 |
+| 教师端后端 | http://localhost:9002 |
 
-### 2.5 Handler 风格
+国内镜像加速细节（Podman `registries.conf`、npm `npmmirror`、Maven 阿里云、`GOPROXY`）与排错说明见 [deploy/README.md](deploy/README.md)。
 
-所有 handler 使用 functional style，**通过 `router.Deps` 注入依赖**：
+### 方式二：本地开发
 
-```go
-func SaveAnalysis(deps *router.Deps) gin.HandlerFunc {
-    return func(c *gin.Context) {
-        // ...
-    }
-}
+```bash
+# 1. 启动基础设施（MySQL 3306 + Redis 6379）
+#    首次需创建数据库并导入表结构，详见 docs/database.md
+
+# 2. 启动学生端后端
+cd services/server-go
+go mod download
+go run cmd/server/main.go            # :8001
+
+# 3. 启动教师端后端
+cd services/server-java
+mvn -DskipTests install
+mvn -pl service -am spring-boot:run  # :9002
+
+# 4. 启动学生端前端
+cd apps/student-web
+npm install --registry=https://registry.npmmirror.com
+npm run dev                          # :5173
+
+# 5. 启动教师端前端（另开终端，端口冲突时按提示切换）
+cd apps/teacher-web
+npm install --registry=https://registry.npmmirror.com
+npm run dev                          # :5173
 ```
 
-路由注册：
+> 两个前端开发端口默认都是 5173，**同时开发时请修改其中之一的 `vite.config.ts` 端口**（例如教师端改为 5174）。
 
-```go
-api.POST("/analysis/save", content.SaveAnalysis(deps))
-v0.POST("/chat", ai.Chat(deps))
-```
+完整环境变量、代码规范与常见问题见 [docs/development.md](docs/development.md)。
 
-### 2.6 配置项速查（`configs/config.json`）
+---
 
-| 字段 | 用途 |
+## 服务与端口
+
+| 服务 | 目录 | 默认端口 | 说明 |
+| --- | --- | --- | --- |
+| 学生端前端 | `apps/student-web` | 5173 | Vite 开发服务器 |
+| 教师端前端 | `apps/teacher-web` | 5173 | Vite 开发服务器（建议改 5174） |
+| 学生端后端 | `services/server-go` | 8001 | REST + WebSocket |
+| 教师端后端 | `services/server-java` | 9002 | REST + Knife4j 文档 |
+| YOLO 检测服务 | `tools/yolo-detector` | 8000 | 可选，WebSocket 推流 |
+| MySQL | — | 3306 | 共享数据库 `lingxi_jianqiu` |
+| Redis | — | 6379 | 缓存 / 会话 |
+
+### 关键接口分组
+
+| 前缀 | 归属 | 鉴权 |
+| --- | --- | --- |
+| `/token`、`/vtoken`、`/captcha` | server-go | 公开 / 游客 |
+| `/api/*` | server-go | JWT |
+| `/api/v0/ai/*` | server-go | JWT |
+| `/api/v0/student/*` | server-go | JWT |
+| `/api/v0/teacher/*` | server-go | JWT（只读课程目录） |
+| `/api/v0/transcribe/*` | server-go | JWT |
+| `/ws/ai`、`/ws/teacher/notification` | server-go | WebSocket |
+| `/api/system/user/*`、`/api/class/*`、`/api/classroom/*`、`/api/homework/*`、`/api/learning/*`、`/api/home/*`、`/api/analysis/*`、`/api/ai/*`、`/api/profile/*` | server-java | Sa-Token |
+
+完整接口清单（含方法、路径、说明）见 [docs/api.md](docs/api.md)。
+
+---
+
+## 配置说明
+
+### server-go（`services/server-go/configs/config.json`）
+
+配置优先级：**环境变量 > `configs/config.json` > 内置默认值**。容器化部署时建议只保留结构，敏感项全部由环境变量注入。
+
+| 环境变量 | 配置项 | 说明 |
+| --- | --- | --- |
+| `SERVER_ADDR` | `server_addr` | 监听地址，默认 `:8001` |
+| `VIDEO_BASE_PATH` | `video_base_path` | 课程视频根目录（映射 `/videos/*`） |
+| `UPLOADS_PATH` | `uploads_path` | 用户上传目录（映射 `/uploads/*`） |
+| `DB_HOST` `DB_PORT` `DB_USER` `DB_PASSWORD` `DB_NAME` `DB_CHARSET` | `database.*` | MySQL 连接 |
+| `REDIS_HOST` `REDIS_PORT` `REDIS_PASSWORD` `REDIS_DB` | `redis.*` | Redis 连接 |
+| `JWT_SECRET` `JWT_ACCESS_EXPIRY` `JWT_REFRESH_EXPIRY` | `jwt.*` | 签名密钥与有效期（秒） |
+| `DEEPSEEK_API_KEY` `DEEPSEEK_BASE_URL` `DEEPSEEK_MODEL` | `deepseek.*` | DeepSeek 配置 |
+| `DASHSCOPE_API_KEY` | `dashscope.api_key` | DashScope（占位） |
+| `CLOUDFLARE_SITE_KEY` `CLOUDFLARE_SECRET_KEY` | `cloudflare_turnstile.*` | 人机验证 |
+
+### server-java（`services/server-java/service/src/main/resources/application.yaml`）
+
+| 环境变量 | 说明 |
 | --- | --- |
-| `server_addr` | 监听地址，默认 `:8001` |
-| `video_base_path` | 课程视频根目录，映射到 `/videos/*` |
-| `uploads_path` | 用户上传目录，映射到 `/uploads/*` |
-| `database` | MySQL 连接（`aiidecn` 库已弃用，新库 `lingxi_jianqiu`） |
-| `redis` | Redis 连接 |
-| `jwt.secret` / `jwt.access_expiry` / `jwt.refresh_expiry` | 签名密钥与有效期 |
-| `deepseek.api_key` / `deepseek.base_url` / `deepseek.model` | DeepSeek 配置 |
-| `dashscope.api_key` | DashScope（占位） |
-| `sendgrid.api_key` | 邮件（暂未启用） |
-| `cloudflare_turnstile.*` | Cloudflare Turnstile 验证 |
+| `SERVER_PORT` | 服务端口，默认 9002 |
+| `SPRING_DATASOURCE_URL` / `SPRING_DATASOURCE_USERNAME` / `SPRING_DATASOURCE_PASSWORD` | 数据源 |
+| `SPRING_DATA_REDIS_HOST` / `SPRING_DATA_REDIS_PORT` / `SPRING_DATA_REDIS_PASSWORD` | Redis |
+| `DEEPSEEK_API_KEY` / `DEEPSEEK_BASE_URL` / `DEEPSEEK_MODEL` | DeepSeek |
+| `PUBLIC_VIDEO_PATH` / `PUBLIC_UPLOAD_PATH` | 公共文件（视频/上传）目录 |
+| `CLOUDFLARE_TURNSTILE_SECRET` | 人机验证 Secret |
 
-### 2.7 数据库初始化
-
-`scripts/init_database.sql` 含完整建表语句；`internal/database/init.go` 也会调用 `AutoMigrate` 兜底。建议首次部署：
-
-```sh
-mysql -uroot -p < scripts/init_database.sql
-go run cmd/server/main.go   # AutoMigrate 兜底
-```
+> ⚠️ **安全提示**：仓库中所有密钥字段均为占位值或空值。生产部署请通过环境变量或密钥管理服务注入，**切勿把真实密钥提交到仓库**。
 
 ---
 
-## 三、教师端（`教师端/`）
+## 文档
 
-`教师端/` 下并存两个子项目，是**前端 + 后端分离**的教师侧应用：
-
-```
-教师端/
-├── my-vue-app/    # Vue 3 + Vite + Element Plus + ECharts 教师前端
-└── teacher-java/  # Spring Boot 3.4 + MyBatis-Plus + Sa-Token 教师后端
-```
-
-### 3.1 `my-vue-app`（教师前端）
-
-#### 技术栈
-
-| 类别 | 选型 |
+| 文档 | 内容 |
 | --- | --- |
-| 框架 | Vue 3.5 + TypeScript 5.9 + Vite 7 |
-| 路由 | vue-router 5（`createWebHistory`） |
-| 状态 | Pinia 3 |
-| UI 库 | Element Plus 2.13 + `@element-plus/icons-vue` |
-| 图表 | ECharts 6 + `echarts-liquidfill` + `vue-echarts` |
-| 样式 | Tailwind CSS 4 + `@tailwindcss/postcss` |
-| HTTP | Axios 1.13 |
-| Mock | mockjs |
-| 部署 | Cloudflare Pages（`wrangler`） |
-| 检测 | `yolov8n.pt` + `yolo_server.py`（项目内带 YOLOv8 推理脚本） |
-
-#### 常用命令
-
-```sh
-cd 教师端/my-vue-app
-npm install           # 依赖已锁定（package-lock.json）
-npm run dev           # 开发：默认 5173，代理 /api -> :9002
-npm run build         # 类型检查 + 生产构建
-npm run preview       # 本地预览（基于 wrangler pages dev）
-npm run deploy        # 构建 + 推送到 Cloudflare Pages
-npm run lint          # oxlint + eslint
-npm run format        # prettier
-npm run type-check    # vue-tsc --build
-```
-
-> Node 版本要求：^20.19.0 || >=22.12.0
-
-#### 目录结构
-
-```
-my-vue-app/
-├── src/
-│   ├── api/           # 按业务域封装的 axios 请求
-│   ├── assets/        # 静态资源
-│   ├── components/    # 通用组件
-│   ├── constants/     # 常量
-│   ├── hooks/         # 组合式函数
-│   ├── router/        # 路由
-│   ├── store/, stores/# Pinia 状态
-│   ├── types/         # 全局类型
-│   ├── utils/         # 工具
-│   ├── views/         # 页面级组件
-│   │   ├── Home/index.vue          # 教师工作台首页
-│   │   ├── Classroom/index.vue     # 课堂管理（视频回放）
-│   │   ├── Learning/index.vue      # 学习管理（AI 课堂）
-│   │   ├── analysis/index.vue      # 学情分析
-│   │   ├── Homework/               # 作业管理 + 批改
-│   │   ├── Profile.vue             # 个人信息
-│   │   └── Login.vue / ForgotPasswordView.vue
-│   └── App.vue, main.ts
-├── public/
-├── vite.config.ts
-├── wrangler.jsonc
-├── yolo_server.py     # YOLOv8 推理服务（毽球检测）
-└── yolov8n.pt
-```
-
-#### 路由与权限
-
-`src/router/index.ts` 中 `requireAuth: true` 的路由统一由 Pinia `userStore.token` 守门：
-
-```
-/login            登录（公开）
-/                 重定向到 /home
-/home             首页 - 我的学习工作台
-/classroom        课堂管理 - 视频回放
-/learning         学习管理 - AI 课堂
-/analysis         学情分析
-/homework         作业管理
-/homework/grade   批改作业
-/profile          个人信息
-```
-
-#### 代理配置（`vite.config.ts`）
-
-```ts
-server: {
-  proxy: {
-    '/api':    { target: 'http://localhost:9002', changeOrigin: true },
-    '/videos': { target: 'http://localhost:9002', changeOrigin: true }
-  }
-}
-```
-
-> `/api` 与 `/videos` 都转发到 `localhost:9002`，对应 `teacher-java` 的默认端口。如 `teacher-java` 端口变更，需同步修改这里。
-
-### 3.2 `teacher-java`（教师后端）
-
-#### 技术栈
-
-| 类别 | 选型 |
-| --- | --- |
-| 语言 / 框架 | Java 21 + Spring Boot 3.4.4 |
-| 构建 | Maven（多模块） |
-| 持久层 | MyBatis-Plus 3.5.9 + MyBatis 3.0.5 + 自研 `BaseJdbcDao` |
-| 工具库 | Guava 33、Hutool 5.8、Fastjson2 2.0.54 |
-| 鉴权 | sa-token 1.39（`sa-token-spring-boot3-starter`） |
-| 媒体 | JavaCV 1.5.11（含 FFmpeg） |
-| API 文档 | Knife4j 4.5（`knife4j-openapi3-jakarta-spring-boot-starter`） |
-| AI | 自封装 `DeepSeekClient` |
-
-#### 模块划分（Maven 多模块）
-
-```
-teacher-java/
-├── common/                # 公共依赖（pom 聚合）
-│   ├── common-core/       # 实体、DTO、DAO 基础、Sa-Token 拦截器、全局异常、Web 层封装
-│   ├── common-jdbc/       # JDBC 工具、SQL 执行器（MySQL/PostgreSQL）
-│   └── common-knife4j/    # Knife4j 配置
-└── service/               # 业务服务主模块
-    └── src/main/java/com/system/service/
-        ├── auth/          # 登录、UserController、UserMapper
-        ├── ai/            # DeepSeek 客户端、AI 控制器、教学建议（TeachingAdvice）
-        ├── classes/       # 班级管理
-        ├── classroom/     # 课堂（视频回放）
-        ├── common/        # 文件上传
-        ├── home/          # 教师工作台首页统计
-        ├── homework/      # 作业创建/批改/提交/反馈
-        ├── learning/      # 学习管理：动作视频、AI 训练计划
-        └── profile/       # 教师个人信息
-```
-
-每个业务子模块遵循 `controller / service / service.impl / mapper / entity / dto / vo` 的标准分层。
-
-#### 常用命令
-
-```sh
-cd 教师端/teacher-java
-
-# 编译
-mvn -q -DskipTests clean package
-
-# 本地启动 service 模块
-mvn -pl service -am spring-boot:run
-
-# 运行测试
-mvn test
-```
-
-> `service` 模块通常才是可启动的 Spring Boot 应用入口；`common/*` 是被依赖的公共库。
-> 默认端口可在 `service/src/main/resources/application*.yml` 中调整，前端代理目标也需同步（`vite.config.ts` 中 `localhost:9002`）。
-
-#### 鉴权
-
-- 基于 `sa-token` 的无状态登录：`StpInterfaceImpl` 实现权限/角色装载；
-- `WebMvcInterceptorConfig` + `MyInterceptor` 注册拦截器；
-- 登录、刷新、注销等接口放在 `auth/controller/UserController.java`。
-
-#### AI 教学建议
-
-`service/ai/` 内含：
-
-- `DeepSeekClient` — DeepSeek HTTP 客户端封装
-- `DeepSeekConfig` — 读取 `deepseek.api-key` 等配置
-- `AiController` — `/ai/generatePlan`、`/ai/generateHomework` 等
-- `AiTeachingAdviceService` — 教学建议持久化与查询
-
-输入/输出 VO 见 `ai/vo/`：`AiGeneratePlanInput`、`AiPlanResult`、`AiHomeworkResult`、`AiTeachingAdvice` 等。
+| [docs/architecture.md](docs/architecture.md) | 系统架构、模块职责、请求链路、鉴权与实时通信 |
+| [docs/api.md](docs/api.md) | 全部 REST / WebSocket 接口清单 |
+| [docs/development.md](docs/development.md) | 本地开发环境、启动顺序、代码规范、排错 |
+| [docs/database.md](docs/database.md) | 数据模型与核心表结构 |
+| [deploy/README.md](deploy/README.md) | Podman 容器化部署与国内镜像加速 |
 
 ---
 
-## 四、协作关系
+## 参与贡献
 
-```
-+-------------------+         HTTP/WS          +-------------------------+
-| 学生端 Vue (5173) |  ─────────────────────► |  GoBackend  (8001)      |
-+-------------------+                         +-------------------------+
-
-+-------------------+         HTTP             +-------------------------+
-| 教师端 Vue (5173) |  ─────────────────────► |  teacher-java  (9002)   |
-|   (my-vue-app)    |  /api, /videos 代理     +-------------------------+
-+-------------------+
-
-                                                ┌── GoBackend  /api/v0/teacher/*（轻量教师接口）
-                                                │
-                                                └── teacher-java（重业务）
-```
-
-- **学生侧**：学生端 Vue → GoBackend（8001）。包含 AI 聊天（WebSocket）、动作分析、视频转录、训练计划、学习统计等。
-- **教师侧**：教师端 Vue → teacher-java（9002）。包含教师工作台、作业、课堂回放、学情、AI 教学建议等。GoBackend 内的 `/api/v0/teacher/*` 作为**只读课程目录**的轻量旁路。
-- **静态视频**：`GoBackend` 暴露 `/videos/*`（映射到 `video_base_path`），可同时服务学生与教师侧的视频播放。
-- **AI**：
-  - 学生对话 / 教练 → DeepSeek（`internal/handler/ai/ai.go`）
-  - 教师训练计划 / 作业生成 → DeepSeek（`teacher-java/service/ai`）
+1. Fork 本仓库并从 `master` 切出特性分支：`git checkout -b feat/your-feature`
+2. 遵守各子项目的代码规范（前端 `npm run lint`，Go `gofmt`，Java 遵循阿里巴巴 Java 开发手册）
+3. 提交前请自测：`go vet ./...`、`npm run type-check`、`mvn -DskipTests package`
+4. 提交信息遵循约定式提交：`<类型>: <中文描述>`，例如 `feat: 新增课堂回放倍速播放`
+5. 发起 Pull Request 并在描述中说明变更点与验证方式
 
 ---
 
-## 五、本地启动顺序
+## 开源许可
 
-1. **启动 MySQL + Redis**（端口分别 3306 / 6379）。
-2. **导入数据**（首次）：
-   ```sh
-   mysql -uroot -p < GoBackend/scripts/init_database.sql
-   # teacher-java 使用的库如需初始化，按 service 模块 README / SQL 脚本执行
-   ```
-3. **启动 GoBackend**：
-   ```sh
-   cd GoBackend && go run cmd/server/main.go
-   ```
-4. **启动 teacher-java**（教师后端）：
-   ```sh
-   cd 教师端/teacher-java && mvn -pl service -am spring-boot:run
-   ```
-5. **启动教师前端**：
-   ```sh
-   cd 教师端/my-vue-app && npm run dev
-   ```
-6. 访问 `http://localhost:5173`（教师）或 `http://localhost:5173`（学生端启动后）即可。
+本项目基于 [MIT License](LICENSE) 开源。
 
----
-
-## 六、后续待办（建议）
-
-- [ ] `teacher-java` 端口与数据库配置与前端代理保持一致（目前 Vite 代理写死 9002）。
-- [ ] GoBackend 的教师侧能力（`/api/v0/teacher/*`）与 `teacher-java` 的边界需明确：是否长期保留两套后端，还是逐步把教师重业务迁回 GoBackend。
-- [ ] `GoBackend` 内 `password / api_key / jwt.secret` 当前明文写在 `configs/config.json`，**生产前必须改为环境变量注入**。
-- [ ] 给 GoBackend 与 `teacher-java` 分别补齐单元/集成测试（`go test -race` 与 JUnit 5）。
-- [ ] 完善教师端 E2E（Playwright 覆盖登录、作业批改、AI 教学建议等关键流程）。
-
----
-
-## 七、参考脚本与文档
-
-- `GoBackend/scripts/init_database.sql` — 数据库建表
-- `GoBackend/scripts/gen_hash*.go` — 密码哈希生成器（用于初始化用户）
-- `GoBackend/scripts/test_login.go` — 登录冒烟测试
-- `GoBackend/server.exe` — 本地已编译产物（请勿提交二进制到生产仓库）
-- `教师端/my-vue-app/yolo_server.py` — YOLOv8 毽球检测推理脚本（开发期本地跑）
-
----
-
-> 维护者请在改动路由或拆/合模块时同步更新本文档对应小节。
+Copyright (c) 2026 LingYi Shuttlecock Teaching Platform

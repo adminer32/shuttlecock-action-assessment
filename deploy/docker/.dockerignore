@@ -1,0 +1,41 @@
+# ============================================================
+# 构建上下文忽略规则（构建上下文 = 仓库根目录）
+#
+# ⚠️ 使用说明：
+#    Docker / Podman 只读取「构建上下文根目录」下的
+#    .containerignore 或 .dockerignore，本文件仅作模板留存。
+#    仓库根已提供 .containerignore，正常情况下无需手动复制。
+#
+# ⚠️ 切勿忽略 deploy/ 目录：
+#    各 Dockerfile 需要从上下文显式 COPY
+#    deploy/docker/nginx/*.conf 与 deploy/docker/maven-settings.xml，
+#    若把 deploy 排除，构建会因找不到文件而失败。
+# ============================================================
+
+# 版本控制与 IDE
+.git
+.gitignore
+.idea
+.vscode
+
+# 依赖目录（npm ci / go mod 会在镜像内重新安装）
+**/node_modules
+**/.pnpm-store
+
+# 构建产物
+**/dist
+**/target
+
+# 运行时产物与本地数据（不要进镜像）
+**/uploads
+**/temp
+**/.wrangler
+**/data
+
+# 文档（镜像内不需要）
+**/*.md
+docs
+
+# 日志
+*.log
+**/*.log

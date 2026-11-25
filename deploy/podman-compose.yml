@@ -1,0 +1,231 @@
+# ============================================================
+# 翎翼毽球教学平台 —— Podman Compose 编排文件
+# 使用方式（务必在 WSL 中执行）：
+#   cd /mnt/d/AiWork/shuttlecock-action-assessment/deploy
+#   cp .env.example .env   # 首次部署，按需修改
+#   podman-compose up -d --build
+#
+# 说明：
+#   - 所有镜像/构建基础镜像均带国内可拉取源前缀，由 ${REGISTRY_MIRROR} 控制；
+#   - 数据库、Redis、Go 上传/视频、Java 上传/视频均使用命名卷持久化；
+#   - 服务之间通过自定义网络 lingxi-net 以服务名互相访问。
+# ============================================================
+
+services:
+  # ---------------- MySQL 8.0 ----------------
+  mysql:
+    image: ${REGISTRY_MIRROR:-docker.m.daocloud.io}/library/mysql:8.0
+    container_name: lingxi-mysql
+    restart: unless-stopped
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-root_change_me}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-lingxi_jianqiu}
+      MYSQL_USER: ${MYSQL_USER:-lingxi}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-lingxi_change_me}
+      TZ: ${TZ:-Asia/Shanghai}
+    ports:
+      - "${MYSQL_PORT:-3306}:3306"
+    volumes:
+      # 数据持久化
+      - mysql_data:/var/lib/mysql
+      # 首次初始化脚本（仅数据卷为空时执行）
+      - ./mysql/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -uroot -p$$MYSQL_ROOT_PASSWORD --silent"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    networks:
+      - lingxi-net
+
+  # ---------------- Redis 7 ----------------
+  redis:
+    image: ${REGISTRY_MIRROR:-docker.m.daocloud.io}/library/redis:7-alpine
+    container_name: lingxi-redis
+    restart: unless-stopped
+    command:
+      - redis-server
+      - --requirepass
+      - "${REDIS_PASSWORD:-redis_change_me}"
+      - --appendonly
+      - "yes"
+    environment:
+      TZ: ${TZ:-Asia/Shanghai}
+      # 供健康检查内 redis-cli -a 使用
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-redis_change_me}
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli -a $${REDIS_PASSWORD} ping | grep -q PONG"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    networks:
+      - lingxi-net
+
+  # ---------------- 学生端后端 server-go (Go + Gin) ----------------
+  server-go:
+    build:
+      context: ..
+      dockerfile: deploy/docker/server-go.Dockerfile
+      args:
+        REGISTRY_MIRROR: ${REGISTRY_MIRROR:-docker.m.daocloud.io}
+    image: lingxi/server-go:latest
+    container_name: lingxi-server-go
+    restart: unless-stopped
+    environment:
+      TZ: ${TZ:-Asia/Shanghai}
+      SERVER_ADDR: ":8001"
+      # 数据库连接（变量名严格对应 internal/config/config.go）
+      DB_HOST: mysql
+      DB_PORT: "3306"
+      DB_USER: ${MYSQL_USER:-lingxi}
+      DB_PASSWORD: ${MYSQL_PASSWORD:-lingxi_change_me}
+      DB_NAME: ${MYSQL_DATABASE:-lingxi_jianqiu}
+      DB_CHARSET: utf8mb4
+      # Redis
+      REDIS_HOST: redis
+      REDIS_PORT: "6379"
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-redis_change_me}
+      REDIS_DB: "0"
+      # 安全 / AI
+      JWT_SECRET: ${JWT_SECRET:-please_change_this_jwt_secret}
+      DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY:-}
+      # DeepSeek 官方 https://api.deepseek.com 与带 /v1 的地址均可用
+      DEEPSEEK_BASE_URL: ${DEEPSEEK_BASE_URL:-https://api.deepseek.com}
+      DEEPSEEK_MODEL: ${DEEPSEEK_MODEL:-deepseek-chat}
+      # 存储路径（容器内）
+      UPLOADS_PATH: /app/data/uploads
+      VIDEO_BASE_PATH: /app/data/videos
+    volumes:
+      - go_uploads:/app/data/uploads
+      - go_videos:/app/data/videos
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      # /captcha 为公开路由，返回 200 即代表 HTTP 服务已就绪（BusyBox wget 不支持 --spider）
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:8001/captcha || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    networks:
+      - lingxi-net
+
+  # ---------------- 教师端后端 server-java (Spring Boot) ----------------
+  server-java:
+    build:
+      context: ..
+      dockerfile: deploy/docker/server-java.Dockerfile
+      args:
+        REGISTRY_MIRROR: ${REGISTRY_MIRROR:-docker.m.daocloud.io}
+    image: lingxi/server-java:latest
+    container_name: lingxi-server-java
+    restart: unless-stopped
+    environment:
+      TZ: ${TZ:-Asia/Shanghai}
+      SERVER_PORT: "9002"
+      # 数据源（变量名严格对应 application.yaml 占位符）
+      SPRING_DATASOURCE_URL: "jdbc:mysql://mysql:3306/${MYSQL_DATABASE:-lingxi_jianqiu}?useSSL=false&serverTimezone=Asia/Shanghai&characterEncoding=UTF-8&allowPublicKeyRetrieval=true"
+      SPRING_DATASOURCE_USERNAME: ${MYSQL_USER:-lingxi}
+      SPRING_DATASOURCE_PASSWORD: ${MYSQL_PASSWORD:-lingxi_change_me}
+      # Redis
+      SPRING_DATA_REDIS_HOST: redis
+      SPRING_DATA_REDIS_PORT: "6379"
+      SPRING_DATA_REDIS_PASSWORD: ${REDIS_PASSWORD:-redis_change_me}
+      # AI
+      DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY:-}
+      DEEPSEEK_BASE_URL: ${DEEPSEEK_BASE_URL:-https://api.deepseek.com}
+      DEEPSEEK_MODEL: ${DEEPSEEK_MODEL:-deepseek-chat}
+      # 公共文件目录（容器内）
+      PUBLIC_VIDEO_PATH: /app/data/videos
+      PUBLIC_UPLOAD_PATH: /app/data/uploads
+    volumes:
+      - java_uploads:/app/data/uploads
+      - java_videos:/app/data/videos
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      # springdoc 的 /v3/api-docs 为公开端点，返回 200 即代表服务已就绪
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:9002/v3/api-docs > /dev/null || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 60s
+    networks:
+      - lingxi-net
+
+  # ---------------- 学生端前端 student-web (nginx) ----------------
+  student-web:
+    build:
+      context: ..
+      dockerfile: deploy/docker/student-web.Dockerfile
+      args:
+        REGISTRY_MIRROR: ${REGISTRY_MIRROR:-docker.m.daocloud.io}
+    image: lingxi/student-web:latest
+    container_name: lingxi-student-web
+    restart: unless-stopped
+    ports:
+      - "${STUDENT_WEB_PORT:-8080}:80"
+    depends_on:
+      server-go:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1/ || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - lingxi-net
+
+  # ---------------- 教师端前端 teacher-web (nginx) ----------------
+  teacher-web:
+    build:
+      context: ..
+      dockerfile: deploy/docker/teacher-web.Dockerfile
+      args:
+        REGISTRY_MIRROR: ${REGISTRY_MIRROR:-docker.m.daocloud.io}
+    image: lingxi/teacher-web:latest
+    container_name: lingxi-teacher-web
+    restart: unless-stopped
+    ports:
+      - "${TEACHER_WEB_PORT:-8081}:80"
+    depends_on:
+      server-java:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1/ || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - lingxi-net
+
+# ---------------- 自定义网络 ----------------
+networks:
+  lingxi-net:
+    driver: bridge
+
+# ---------------- 命名卷（持久化） ----------------
+volumes:
+  mysql_data:
+  redis_data:
+  go_uploads:
+  go_videos:
+  java_uploads:
+  java_videos:
