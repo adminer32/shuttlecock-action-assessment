@@ -14,6 +14,17 @@ export interface AnalysisClassDashboard {
     monthRate: number
     weekRate: number
     dayCounts: Record<number, number>
+    /** 达标人数（≥ 12 天） */
+    qualifiedCount?: number
+    /** 连续打卡最多学生 */
+    topContinuousStudent?: string
+    topContinuousDays?: number
+    /** 学习时间最长学生 */
+    topStudyStudent?: string
+    topStudyHours?: number
+    /** 打卡最多学生 */
+    topCheckinStudent?: string
+    topCheckinDays?: number
   }
   scoreDistribution: {
     excellent: number

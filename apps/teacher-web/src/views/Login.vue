@@ -171,8 +171,8 @@ const doLogin = async () => {
     }
     const res = await loginApi(loginData)
 
-    // 兼容两种响应格式：code: 200 (Mock) 或 status: 'success' (后端)
-    const isSuccess = (res.code === 200) || (res.status === 'success')
+    // 后端统一包络为 { code, message, data }；code === 200 视为成功
+    const isSuccess = res.code === 200
     
     if (isSuccess) {
         ElMessage.success('登录成功！')

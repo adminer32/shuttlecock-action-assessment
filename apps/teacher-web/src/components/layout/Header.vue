@@ -39,8 +39,9 @@ const handleSelectClass = (classItem: typeof classList.value[0]) => {
 
 onMounted(async () => {
   await classStore.fetchClassList()
-  if (classList.value.length > 0 && !currentClass.value) {
-    classStore.setCurrentClass(classList.value[0])
+  const firstClass = classList.value[0]
+  if (firstClass && !currentClass.value) {
+    classStore.setCurrentClass(firstClass)
   }
 })
 </script>

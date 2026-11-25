@@ -40,17 +40,18 @@ const removeTask = (index: number) => {
   tasks.value.splice(index, 1)
 }
 
-const toggleVideo = (videoId: string) => {
-  const index = selectedVideos.value.indexOf(videoId)
+const toggleVideo = (videoId: number | string) => {
+  const key = String(videoId)
+  const index = selectedVideos.value.indexOf(key)
   if (index > -1) {
     selectedVideos.value.splice(index, 1)
   } else {
-    selectedVideos.value.push(videoId)
+    selectedVideos.value.push(key)
   }
 }
 
 const handleSave = () => {
-  const validTasks = tasks.value.filter(t => t.name.trim())
+  const validTasks = tasks.value.filter(t => (t.name || '').trim())
   emit('save', {
     goal: weeklyGoal.value,
     tasks: validTasks,
@@ -123,7 +124,7 @@ const handleSave = () => {
             v-for="video in videoList"
             :key="video.id"
             class="video-option"
-            :class="{ selected: selectedVideos.includes(video.id) }"
+            :class="{ selected: selectedVideos.includes(String(video.id)) }"
             @click="toggleVideo(video.id)"
           >
             <span></span>

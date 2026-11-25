@@ -62,6 +62,21 @@ ls
 
 ## 3. 依赖安装
 
+> **开始之前：媒体资源需要自行补齐**
+>
+> 为保持仓库轻量，训练 / 演示类媒体**不纳入版本控制**（`.gitignore` 已排除 `*.mp4`、`*.fbx`、`*.glb`、`*.csv`、`*.pt` 等）。
+> 克隆后以下目录为空，各目录内附有 `README.md` 说明所需文件清单、命名规则与引用位置：
+>
+> | 目录 | 缺失内容 | 影响 |
+> | --- | --- | --- |
+> | `apps/student-web/public/videos/` | 课程视频 | 课程中心 / 智能课堂无法播放 |
+> | `apps/student-web/public/motion-demo-view/` | FBX/GLB 模型、真人演示视频 | 3D 动作演示页无内容 |
+> | `apps/student-web/public/motion-capture-data/` | 动作捕捉 CSV | 动作评估无法比对打分 |
+> | `services/server-java/public/` | 课堂回放视频 | 课堂回放无内容 |
+> | `tools/yolo-detector/` | `yolov8n.pt` | YOLO 检测不可用（可选组件） |
+>
+> 未补齐时**不影响启动与登录**，仅相关页面功能不可用。UI 图标、Logo 等小体积静态资源已随仓库提交。
+
 ### 3.1 前端依赖（npm，强调国内镜像）
 
 两个前端都使用 npm。为加速国内下载，建议先设置镜像源为 `registry.npmmirror.com`：

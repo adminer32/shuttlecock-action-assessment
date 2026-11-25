@@ -27,7 +27,7 @@ student-web/
 │   ├── motion-capture-data/       # 动作捕捉 CSV 数据（动作评分对比用）
 │   ├── motion-demo-view/          # 3D 动作演示资源（FBX/GLB 模型、真人演示视频）
 │   ├── static/                    # 公共静态图片与脚本
-│   └── videos/                    # 课程与专项动作视频
+│   └── videos/                    # 课程与专项动作视频（不随仓库提交，见目录内 README）
 ├── src/
 │   ├── api/                       # 按业务域拆分的接口封装
 │   ├── assets/                    # 参与打包的图片、JSON 数据与样式

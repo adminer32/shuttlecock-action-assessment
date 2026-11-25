@@ -54,7 +54,7 @@ const handleConfirm = () => {
   }
   if (!props.video) return
   
-  emit('recommend', selectedStudentIds.value, props.video.id, comment.value)
+  emit('recommend', selectedStudentIds.value, String(props.video.id), comment.value)
   ElMessage.success(`已成功推荐给 ${selectedStudentIds.value.length} 名学生`)
   handleClose()
 }

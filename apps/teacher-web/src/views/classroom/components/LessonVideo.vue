@@ -11,7 +11,7 @@ interface ClassAnalysis {
 }
 
 interface NoteItem {
-  id: number
+  id: number | string
   text: string
 }
 
@@ -28,8 +28,8 @@ const emit = defineEmits<{
   (e: 'screenshot', dataUrl: string): void
   (e: 'timeupdate', time: number): void
   (e: 'add-note'): void
-  (e: 'remove-note', id: number): void
-  (e: 'update-note', id: number, text: string): void
+  (e: 'remove-note', id: number | string): void
+  (e: 'update-note', id: number | string, text: string): void
   (e: 'save-notes'): void
   (e: 'add-ai-note', text: string): void
   (e: 'restore-video'): void
@@ -71,13 +71,13 @@ function addNote() {
   emit('add-note')
 }
 
-function removeNote(id: number) {
+function removeNote(id: number | string) {
   if (classNotes.value.length > 1) {
     emit('remove-note', id)
   }
 }
 
-function updateNoteText(id: number, text: string) {
+function updateNoteText(id: number | string, text: string) {
   emit('update-note', id, text)
 }
 

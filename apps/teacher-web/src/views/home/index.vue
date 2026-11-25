@@ -133,7 +133,7 @@ const handleEditNotice = async (notice: Notice) => {
   }
 }
 
-const handleDeleteNotice = async (id: string) => {
+const handleDeleteNotice = async (id: number | string) => {
   try {
     const res = await homeApi.deleteNotice(id)
     if (res.data) {

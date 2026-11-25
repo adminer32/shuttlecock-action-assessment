@@ -11,7 +11,7 @@ import EditPlanDialog from './components/EditPlanDialog.vue'
 import ReviewPlanDialog from './components/ReviewPlanDialog.vue'
 import RecommendVideoDialog from './components/RecommendVideoDialog.vue'
 import AddVideoDialog from './components/AddVideoDialog.vue'
-import type { VideoItem, VideoFormData, VideoRecommendation } from './types'
+import type { VideoItem, VideoFormData, VideoRecommendation, TrainingPlan } from './types'
 import { aiApi, type AiPlanInput, type AiPlanResult } from '@/api/aiApi'
 import { MagicStick, Loading } from '@element-plus/icons-vue'
 
@@ -87,6 +87,7 @@ const loadVideos = async () => {
       }
       videoLibrary.value = res.data.map(v => ({
         ...v,
+        id: String(v.id),
         category: categoryMap[v.category] || v.category
       }))
     }
@@ -153,7 +154,8 @@ const handleReviewPlan = () => {
   showReviewDialog.value = true
 }
 
-const handleApprovePlan = async () => {
+const handleApprovePlan = async (plan?: TrainingPlan) => {
+  if (plan) currentPlan.value = plan as unknown as PlanDetailType
   if (!currentPlan.value) return
   try {
     await learningApi.reviewPlan({
@@ -171,7 +173,8 @@ const handleApprovePlan = async () => {
   }
 }
 
-const handleRejectPlan = async (reason: string) => {
+const handleRejectPlan = async (plan: TrainingPlan, reason: string) => {
+  if (plan) currentPlan.value = plan as unknown as PlanDetailType
   if (!currentPlan.value) return
   try {
     await learningApi.reviewPlan({
@@ -191,7 +194,7 @@ const handleRejectPlan = async (reason: string) => {
 }
 
 const handleSavePlan = (plan: TrainingPlan) => {
-  currentPlan.value = plan
+  currentPlan.value = plan as unknown as PlanDetailType
   ElMessage.success(`已为${currentStudent.value?.name}保存训练计划`)
 }
 
@@ -213,15 +216,15 @@ const handleRecommendVideo = (video: VideoItem) => {
   showRecommendDialog.value = true
 }
 
-const handleConfirmRecommend = async (studentIds: number[], videoId: number, comment: string) => {
+const handleConfirmRecommend = async (studentIds: number[], videoId: string | number, comment: string) => {
   try {
     await learningApi.recommendVideo({
-      videoId,
+      videoId: Number(videoId),
       studentIds,
       teacherId: 2,
       comment
     })
-    const video = videoLibrary.value.find(v => v.id === videoId)
+    const video = videoLibrary.value.find(v => String(v.id) === String(videoId))
     if (video) {
       if (!video.recommendedTo) {
         video.recommendedTo = []

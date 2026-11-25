@@ -190,6 +190,20 @@ shuttlecock-action-assessment/
 
 **代码规模**：Go 20 个源文件 / Java 125 个源文件 / Vue 127 个单文件组件 / TypeScript 103 个模块。
 
+### 关于媒体资源
+
+为保证仓库轻量，**训练与演示类媒体不纳入版本控制**（已在 `.gitignore` 中排除）：
+
+| 类型 | 位置 | 说明 |
+| --- | --- | --- |
+| 课程视频 | `apps/student-web/public/videos/` | 课程中心与智能课堂播放用 |
+| 3D 动作资源 | `apps/student-web/public/motion-demo-view/` | FBX 骨骼动画、GLB 场景、真人演示视频 |
+| 动作捕捉数据 | `apps/student-web/public/motion-capture-data/` | 动作评分比对用 CSV |
+| 课堂公共文件 | `services/server-java/public/` | 课堂回放与知识库视频 |
+| 模型权重 | `tools/yolo-detector/` | `yolov8n.pt` |
+
+上述每个目录内均附有 `README.md`，说明所需文件清单、命名规则与引用位置。UI 图标、Logo、首页文案配图等**小体积静态资源仍随仓库提交**，克隆后即可直接开发界面。
+
 ---
 
 ## 快速开始

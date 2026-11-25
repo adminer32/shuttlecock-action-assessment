@@ -46,7 +46,7 @@ const renderTurnstile = () => {
 
 const execute = () => {
   if (widgetId !== null && window.turnstile) {
-    window.turnstile.execute(container, {
+    window.turnstile.execute(widgetId, {
       action: props.action
     });
   }

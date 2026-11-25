@@ -29,8 +29,8 @@ watch(() => props.modelValue, (val) => {
     form.value = {
       title: props.homework.title || '',
       requirements: props.homework.requirements || '',
-      deadline: props.homework.deadline ? props.homework.deadline.split('T')[0] : '',
-      deadlineTime: props.homework.deadline ? props.homework.deadline.split('T')[1]?.substring(0, 5) : '',
+      deadline: props.homework.deadline ? (props.homework.deadline.split('T')[0] ?? '') : '',
+      deadlineTime: props.homework.deadline ? (props.homework.deadline.split('T')[1]?.substring(0, 5) ?? '') : '',
       demoVideoUrl: ''
     }
   }

@@ -10,7 +10,7 @@ const props = defineProps<{
 const emit = defineEmits<{
   (e: 'publish', notice: Notice): void
   (e: 'edit', notice: Notice): void
-  (e: 'delete', id: string): void
+  (e: 'delete', id: number | string): void
 }>()
 
 const showPublishDialog = ref(false)
@@ -57,7 +57,8 @@ const handlePublish = () => {
     time: timeStr,
     isImportant: formData.value.isImportant,
     readCount: editingNotice.value?.readCount || 0,
-    totalStudents: 42
+    totalStudents: 42,
+    notificationType: editingNotice.value?.notificationType || 'NOTICE'
   }
   
   if (editingNotice.value) {

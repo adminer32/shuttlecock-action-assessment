@@ -64,6 +64,16 @@ onMounted(() => {
   loadHomeworkData()
 })
 
+/** 将时间字符串格式化为 YYYY-MM-DD HH:mm，无效值返回 '-' */
+const formatDateTime = (value?: string | null): string => {
+  if (!value) return '-'
+  const date = new Date(value.replace(' ', 'T'))
+  if (Number.isNaN(date.getTime())) return value
+  const pad = (n: number) => String(n).padStart(2, '0')
+  return date.getFullYear() + '-' + pad(date.getMonth() + 1) + '-' + pad(date.getDate())
+    + ' ' + pad(date.getHours()) + ':' + pad(date.getMinutes())
+}
+
 const loadCurrentSubmission = () => {
   if (currentSubmission.value) {
     scoreInput.value = currentSubmission.value.teacherScore || currentSubmission.value.aiScore || 0
@@ -94,8 +104,9 @@ const handleSelectStudent = (index: number) => {
 }
 
 const handleSaveGrade = async () => {
-  if (!currentSubmission.value) return
-  
+  const submission = currentSubmission.value
+  if (!submission) return
+
   if (scoreInput.value < 0 || scoreInput.value > 100) {
     ElMessage.warning('请输入有效的分数 (0-100)')
     return
@@ -105,15 +116,19 @@ const handleSaveGrade = async () => {
     const dto: GradeSubmissionDTO = {
       teacherScore: scoreInput.value,
       teacherComment: feedbackInput.value,
-      aiSuggestion: currentSubmission.value.aiSuggestion || undefined
+      aiSuggestion: submission.aiSuggestion || undefined
     }
-    await gradeSubmission(currentSubmission.value.id, dto)
+    if (submission.id === undefined) {
+      ElMessage.warning('该提交记录缺少 ID，无法保存批改')
+      return
+    }
+    await gradeSubmission(submission.id, dto)
     
-    currentSubmission.value.teacherScore = scoreInput.value
-    currentSubmission.value.feedback = feedbackInput.value
-    currentSubmission.value.status = 1
+    submission.teacherScore = scoreInput.value
+    submission.feedback = feedbackInput.value
+    submission.status = 1
     
-    ElMessage.success(`${currentSubmission.value.studentName} 的作业已批改完成`)
+    ElMessage.success(`${submission.studentName} 的作业已批改完成`)
     
     if (currentStudentIndex.value < submissions.value.length - 1) {
       handleNextStudent()
@@ -127,7 +142,7 @@ const handleBack = () => {
   router.push('/homework')
 }
 
-const getScoreColor = (score: number | null) => {
+const getScoreColor = (score?: number | null) => {
   if (!score) return '#64748b'
   if (score >= 90) return '#10b981'
   if (score >= 80) return '#3b82f6'

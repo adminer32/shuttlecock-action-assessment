@@ -160,10 +160,9 @@ const handleAiGenerate = async () => {
       ElMessage.success('AI生成作业成功！可编辑后发布')
       showAiPanel.value = false
     }
-  } catch (e: {
-    message?: string
-  }) {
-    ElMessage.error('AI生成失败：' + (e.message || '请检查网络连接'))
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e)
+    ElMessage.error('AI生成失败：' + (msg || '请检查网络连接'))
   } finally {
     aiGenerating.value = false
   }

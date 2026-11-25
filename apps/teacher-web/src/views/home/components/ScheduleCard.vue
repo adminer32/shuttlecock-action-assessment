@@ -237,7 +237,7 @@ const handleAddCourse = () => {
               </template>
               <template v-else-if="selectedCell?.day === day && selectedCell?.period === slot.period && !isCourseCovered(day, slot.period)">
                 <div class="add-button-wrapper">
-                  <el-button type="primary" size="small" round @click="(e) => handleAddButtonClick(e, day, slot.period)">
+                  <el-button type="primary" size="small" round @click="handleAddButtonClick($event, day, slot.period)">
                     + 添加
                   </el-button>
                 </div>

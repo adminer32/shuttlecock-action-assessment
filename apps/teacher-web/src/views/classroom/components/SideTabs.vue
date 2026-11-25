@@ -29,11 +29,12 @@ function handleSelectPoint(point: KnowledgePoint) {
   emit('selectPoint', point)
 }
 
-function handleToggleExpand(pointId: string) {
-  if (props.expandedPointId === pointId) {
+function handleToggleExpand(pointId: number | string) {
+  const key = String(pointId)
+  if (props.expandedPointId === key) {
     emit('expandPoint', null)
   } else {
-    emit('expandPoint', pointId)
+    emit('expandPoint', key)
   }
 }
 
@@ -111,7 +112,7 @@ function handlePlayVideo(point: KnowledgePoint) {
                       <span class="video-icon">🎬</span>
                     </div>
                     <button class="expand-btn" @click.stop="handleToggleExpand(point.id)">
-                      {{ expandedPointId === point.id ? '收起' : '展开' }}
+                      {{ expandedPointId === String(point.id) ? '收起' : '展开' }}
                     </button>
                   </div>
                 </div>

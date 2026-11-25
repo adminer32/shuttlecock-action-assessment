@@ -2,6 +2,7 @@ export class SystemConstant {
     static readonly THEME = '--current-theme';
     static readonly Locale = 'current-i18n';
     static readonly TOKEN = '__token__';
+    static readonly USER_INFO = '__user_info__';
     static readonly RememberMe = 'RememberMe';
     static readonly AutoLogin = "AutoLogin";
     static readonly Event = {

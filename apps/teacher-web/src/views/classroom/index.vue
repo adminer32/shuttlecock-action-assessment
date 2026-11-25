@@ -176,16 +176,16 @@ const handleSelectLesson = async (lesson: ClassroomLesson) => {
 
 const handleAddNote = () => {
   const newId = Date.now()
-  notes.value.push({ id: newId, content: '' })
+  notes.value.push({ id: newId, content: '', createdAt: '', lessonId: currentLessonId.value ?? '' })
 }
 
-const handleRemoveNote = (id: number) => {
+const handleRemoveNote = (id: number | string) => {
   if (notes.value.length > 1) {
     notes.value = notes.value.filter(n => n.id !== id)
   }
 }
 
-const handleUpdateNote = (id: number, text: string) => {
+const handleUpdateNote = (id: number | string, text: string) => {
   const note = notes.value.find(n => n.id === id)
   if (note) {
     note.content = text
@@ -211,7 +211,7 @@ const handleSaveNotes = async () => {
 }
 
 const handleAddAiNote = (text: string) => {
-  notes.value.unshift({ id: Date.now(), content: text })
+  notes.value.unshift({ id: Date.now(), content: text, createdAt: '', lessonId: currentLessonId.value ?? '' })
 }
 
 const handleAddKnowledge = () => {
@@ -257,9 +257,10 @@ const loadLessons = async () => {
   loading.value = true
   try {
     const res = await classroomApi.getLessons(String(classStore.currentClass.id))
-    if (res.data?.length > 0) {
+    const firstLesson = res.data?.[0]
+    if (firstLesson) {
       lessons.value = res.data
-      handleSelectLesson(res.data[0])
+      handleSelectLesson(firstLesson)
     } else {
       lessons.value = []
       currentLessonId.value = null
@@ -351,8 +352,8 @@ watch(() => classStore.currentClass?.id, () => {
         <SideTabs
           :knowledge-points="knowledgePoints"
           :lessons="lessons"
-          :current-lesson-id="currentLessonId"
-          :current-point-id="currentKnowledgePoint?.id || null"
+          :current-lesson-id="currentLessonId || ''"
+          :current-point-id="currentKnowledgePoint ? String(currentKnowledgePoint.id) : null"
           :expanded-point-id="expandedPointId"
           @select-lesson="handleSelectLesson"
           @select-point="handleSelectKnowledge"

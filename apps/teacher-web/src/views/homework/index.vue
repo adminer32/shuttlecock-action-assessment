@@ -54,8 +54,9 @@ onMounted(async () => {
   if (classStore.classList.length === 0) {
     await classStore.fetchClassList()
   }
-  if (classStore.classList.length > 0 && !currentClass.value) {
-    classStore.setCurrentClass(classStore.classList[0])
+  const firstClass = classStore.classList[0]
+  if (firstClass && !currentClass.value) {
+    classStore.setCurrentClass(firstClass)
   }
   loadHomeworkList()
 })

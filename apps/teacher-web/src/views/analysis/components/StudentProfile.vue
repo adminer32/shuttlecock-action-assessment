@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { ref } from 'vue'
 import { Trophy } from '@element-plus/icons-vue'
 import BodyAnalysisDialog from './BodyAnalysisDialog.vue'
 
