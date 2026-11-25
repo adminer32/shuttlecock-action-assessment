@@ -87,40 +87,61 @@
 
 ## 系统架构
 
-```
-                         ┌──────────────────────────┐
-                         │        浏览器 / 移动端      │
-                         └───────────┬──────────────┘
-                                     │ HTTPS
-              ┌──────────────────────┴──────────────────────┐
-              │                                             │
-    ┌─────────▼──────────┐                       ┌──────────▼─────────┐
-    │  student-web :5173 │                       │  teacher-web :5173 │
-    │  Vue 3 + Vite 5    │                       │  Vue 3 + Vite 7    │
-    │  antd-vue / 3D     │                       │  Element Plus      │
-    └─────────┬──────────┘                       └──────────┬─────────┘
-              │ /api /videos /uploads                       │ /api /videos
-              │                                             │
-    ┌─────────▼──────────┐                       ┌──────────▼─────────┐
-    │   server-go :8001  │                       │ server-java :9002  │
-    │   Gin + GORM       │                       │ Spring Boot 3.4.4  │
-    │   JWT HS512        │                       │ Sa-Token + MP      │
-    │   WebSocket ×2     │                       │ JavaCV (FFmpeg)    │
-    └──────┬──────┬──────┘                       └──────────┬─────────┘
-           │      │                                         │
-           │      └──────────────┬──────────────────────────┘
-           │                     │
-    ┌──────▼──────┐       ┌──────▼──────┐        ┌────────────────────┐
-    │  MySQL 8.0  │       │  Redis 7    │        │  DeepSeek API      │
-    │ lingxi_     │       │  会话/缓存   │        │  (对话 / 计划 /     │
-    │ jianqiu     │       │             │        │   作业 / 建议)      │
-    └─────────────┘       └─────────────┘        └────────────────────┘
+```mermaid
+flowchart TB
+    Browser["浏览器 / 移动端"]
 
-    ┌───────────────────────────────────────────────────────────────┐
-    │  可选组件：tools/yolo-detector（Python + FastAPI + YOLOv8）     │
-    │  通过 /ws/analysis 向教师端推送课堂视频检测帧与出勤/参与度指标      │
-    └───────────────────────────────────────────────────────────────┘
+    subgraph apps["前端应用 · apps"]
+        direction LR
+        SW["student-web<br/>Vue 3.5 + Vite 5<br/>学生端 :5173"]
+        TW["teacher-web<br/>Vue 3.5 + Vite 7<br/>教师端 :5173"]
+    end
+
+    subgraph services["后端服务 · services"]
+        direction LR
+        SG["server-go<br/>Go 1.23 + Gin + GORM<br/>JWT HS512 · WebSocket<br/>:8001"]
+        SJ["server-java<br/>Spring Boot 3.4.4<br/>Sa-Token + MyBatis-Plus<br/>:9002"]
+    end
+
+    subgraph infra["基础设施"]
+        direction LR
+        DB[("MySQL 8.0<br/>lingxi_jianqiu")]
+        RD[("Redis 7<br/>会话 / 缓存")]
+    end
+
+    AI["DeepSeek API<br/>对话 · 训练计划 · 作业 · 教学建议"]
+    YOLO["tools/yolo-detector<br/>Python + FastAPI + YOLOv8<br/>可选组件 :8000"]
+
+    Browser -->|HTTPS| SW
+    Browser -->|HTTPS| TW
+
+    SW -->|"HTTP /api · /videos · /uploads"| SG
+    TW -->|"HTTP /api · /videos"| SJ
+    SW <-.->|"WebSocket /ws/ai"| SG
+    TW <-.->|"WebSocket /ws/teacher/notification"| SJ
+
+    SG --> DB
+    SG --> RD
+    SJ --> DB
+    SJ --> RD
+
+    SG -->|HTTPS| AI
+    SJ -->|HTTPS| AI
+
+    YOLO -.->|"WebSocket /ws/analysis"| SJ
+
+    style Browser fill:#eef2ff,stroke:#6366f1,stroke-width:2px,color:#312e81
+    style SW fill:#ecfdf5,stroke:#10b981,stroke-width:2px,color:#065f46
+    style TW fill:#ecfdf5,stroke:#10b981,stroke-width:2px,color:#065f46
+    style SG fill:#eff6ff,stroke:#3b82f6,stroke-width:2px,color:#1e3a8a
+    style SJ fill:#fff7ed,stroke:#f97316,stroke-width:2px,color:#7c2d12
+    style DB fill:#f8fafc,stroke:#64748b,stroke-width:2px,color:#0f172a
+    style RD fill:#fef2f2,stroke:#ef4444,stroke-width:2px,color:#7f1d1d
+    style AI fill:#f5f3ff,stroke:#8b5cf6,stroke-width:2px,color:#4c1d95
+    style YOLO fill:#f8fafc,stroke:#94a3b8,stroke-width:1px,stroke-dasharray:4 3,color:#334155
 ```
+
+> 上图由 GitHub 原生 Mermaid 渲染，随深浅色主题自动适配。更多细节见 [docs/architecture.md](docs/architecture.md)。
 
 ### 请求链路要点
 
@@ -128,6 +149,7 @@
 2. **教师端**：`teacher-web` → Vite 代理 `/api`、`/videos` → `server-java:9002`；课堂通知经 `/ws/teacher/notification`。
 3. **数据互通**：两端连接同一个 MySQL 库（`lingxi_jianqiu`），教师在教师端下发的作业与训练计划，学生在学生端可见。
 4. **AI 集成**：学生侧对话/笔记润色由 Go 端调用 DeepSeek；教师侧训练计划/作业/教学建议由 Java 端 `DeepSeekClient` 调用 DeepSeek。
+5. **可选组件**：`tools/yolo-detector` 通过 `/ws/analysis` 向教师端推送课堂视频检测帧与出勤、参与度指标，不参与主链路。
 
 详见 [docs/architecture.md](docs/architecture.md)。
 
